@@ -1,0 +1,486 @@
+<?php
+
+/**
+ * implement hook_menu()
+ * create menu item
+ * kripal_itonics_products_menu function will create a menu item which can be access with localhost/path/to/books
+ */
+function kripal_itonics_products_menu()
+{
+  $items = array ();
+
+  // Product List
+  $items['products'] = array (
+    'title'            => t('Product View'),
+    'description'      => t('Product Information'),
+    'page callback'    => 'kripal_itonics_products_list',
+    'access arguments' => array ( 'dashboard' ),
+    'type'             => MENU_NORMAL_ITEM
+  );
+
+  // Product Create
+  $items['products/form'] = array (
+    'title'            => t('Product Create'),
+    'description'      => t('Create Product'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array ( 'kripal_itonics_products_form' ),
+    'access arguments' => array ( 'dashboard ' ),
+  );
+
+  // Product Delete
+  $items['product/delete/%product'] = array (
+    'title'            => t('Product Delete'),
+    'description'      => t('Delete Product'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array ( 'kripal_itonics_products_delete_confirm', 2 ),
+    'access arguments' => array ( 'dashboard ' ),
+    'type'             => MENU_CALLBACK,
+  );
+
+  // Product Edit
+  $items['product/edit/%product'] = array (
+    'title'            => t('Product Edit'),
+    'description'      => t('Edit Product'),
+    'page callback'    => 'drupal_get_form',
+    'page arguments'   => array ( 'kripal_itonics_products_edit_form', 2 ),
+    'access arguments' => array ( 'dashboard ' ),
+    'type'             => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+// Product List
+function kripal_itonics_products_list()
+{
+  $header = array (
+    t('Title'),
+    t('Image'),
+    t('Summary'),
+    t('Description'),
+    t('Category'),
+    t('Type'),
+    t('Owner Email'),
+    t('Expiry Date'),
+    t('Actions'),
+  );
+  $query  = "SELECT * FROM {kripal_itonics_products}";
+  $rs     = db_query($query)->fetchAll(PDO::FETCH_ASSOC);
+  $rows   = array ();
+
+  if (count($rs) > 0)
+  {
+    foreach ($rs as $data)
+    {
+      $title       = $data['title'];
+      $image       = image_style_url('thumbnail', $data['image']);
+      $summary     = $data['summary'];
+      $description = $data['description'];
+      $category    = ucwords(str_replace(array ( '|', '_' ), array ( ', ', ' ' ), $data['category']));
+      $type        = ucwords($data['type']);
+      $owner_email = $data['owner_email'];
+      $expiry_date = $data['expiry_date'];
+
+      $rows[] = array (
+        $title,
+        "<img src=$image>",
+        $summary,
+        $description,
+        $category,
+        $type,
+        $owner_email,
+        $expiry_date,
+        "<a href='product/edit/{$data['pid']}'>" . t('Edit') . "</a> | <a href='product/delete/{$data['pid']}'>" . t('Delete') . "</a>"
+      );
+    }
+  }
+  $str = theme_table(array (
+    'header'     => $header,
+    'rows'       => $rows,
+    'attributes' => array (),
+    'caption'    => '',
+    'colgroups'  => array (),
+    'sticky'     => array (),
+    'empty'      => array (),
+  ));
+
+  return $str;
+}
+
+// Product Create Form
+function kripal_itonics_products_form($node, &$form_state)
+{
+  // Default date and date format
+  $date   = date('YYYY-MM-DD');
+  $format = 'Y-m-d';
+
+  $form['title'] = array (
+    '#type'          => 'textfield',
+    '#title'         => 'Product Title',
+    '#default_value' => ! empty($node->title) ? $node->title : '',
+    '#required'      => true,
+  );
+
+  $form['image'] = array (
+    '#type'        => 'file',
+    '#title'       => t('Image'),
+    '#description' => t('The image of the product'),
+    '#required'    => false
+  );
+
+  $form['summary'] = array (
+    '#type'          => 'textarea',
+    '#title'         => 'Product Summary',
+    '#default_value' => ! empty($node->summary) ? $node->summary : '',
+    '#required'      => false,
+  );
+
+  $form['description'] = array (
+    '#type'          => 'text_format',
+    '#title'         => 'Product Description',
+    '#default_value' => ! empty($node->description) ? $node->description : '',
+    '#required'      => false,
+    '#format'        => 'filtered_html',
+    '#base_type'     => 'textarea',
+  );
+
+  $form['category'] = array (
+    '#type'     => 'select',
+    '#title'    => 'Product Category',
+    '#required' => true,
+    '#options'  => _multiselect_options(),
+    '#multiple' => true,
+  );
+
+  $form['type'] = array (
+    '#type'          => 'radios',
+    '#title'         => 'Product Type',
+    '#default_value' => ! empty($node->type) ? $node->type : '',
+    '#required'      => true,
+    '#options'       => _radio_options(),
+  );
+
+  $form['owner_email'] = array (
+    '#type'          => 'textfield',
+    '#title'         => 'Product Owner Email',
+    '#default_value' => ! empty($node->owner_email) ? $node->owner_email : '',
+    '#required'      => true,
+  );
+
+  $form['expiry_date'] = array (
+    '#type'                => 'date_select',
+    '#title'               => t('Product Expiry Date'),
+    '#default_value'       => $date,
+    '#date_format'         => $format,
+    '#date_label_position' => 'within'
+  );
+
+  $form['save'] = array (
+    '#type'     => 'submit',
+    '#value'    => 'Save',
+    '#submit'   => array ( 'kripal_itonics_products_form_submit' ),
+    '#validate' => array ( 'kripal_itonics_products_form_validate' ),
+  );
+
+  return $form;
+}
+
+// Validate for Product Create
+function kripal_itonics_products_form_validate($form, &$form_state)
+{
+  $mail = $form_state['values']['owner_email'];
+
+  if ( ! valid_email_address($mail))
+  {
+    form_set_error('[submitted][email_address]', t('The email address appears to be invalid.'));
+  }
+
+  // Store new file temp.
+  $new_file = file_save_upload('image', array (
+    'file_validate_extensions' => array ( 'jpg jpeg png gif' ),
+    'custom_validate_size'     => array ( 1024 * 1024 * 30 )
+  ));
+
+  if ( ! is_null($new_file))
+  {
+    if ( ! $new_file)
+    {
+      form_set_error('[submitted][image]', t('The image is not valid.'));
+    }
+    else
+    {
+      $new_file->status = FILE_STATUS_PERMANENT;
+      file_save($new_file);
+      $form_state['storage']['fid'] = $new_file->fid;
+    }
+  }
+}
+
+// Insert Product
+function kripal_itonics_products_form_submit($form, &$form_state)
+{
+  if (array_key_exists('storage', $form_state))
+  {
+    $new_file      = file_load($form_state['storage']['fid']);
+    $some_location = 'public://';
+    $location      = $some_location . time() . $new_file->filename;
+    $result        = file_move($new_file, $location);
+    $url           = $result ? $result->filename : '';
+  }
+  else
+  {
+    $url = '';
+  }
+  $category = implode('|', $form_state['values']['category']);
+
+  db_insert('kripal_itonics_products')->fields(array (
+    'title'       => $form_state['values']['title'],
+    'image'       => $url,
+    'summary'     => $form_state['values']['summary'],
+    'description' => $form_state['values']['description']['value'],
+    'category'    => $category,
+    'type'        => $form_state['values']['type'],
+    'owner_email' => $form_state['values']['owner_email'],
+    'expiry_date' => $form_state['values']['expiry_date'],
+  ))->execute();
+}
+
+// Load Product
+function product_load($pid)
+{
+  $query = "SELECT * FROM {kripal_itonics_products} WHERE pid = :pid";
+  $rs    = db_query($query, array ( ':pid' => $pid ))->fetch(PDO::FETCH_ASSOC);
+
+  if (count($rs))
+  {
+    return $rs;
+  }
+
+  return false;
+}
+
+// Product Delete Confirm
+function kripal_itonics_products_delete_confirm($form, &$form_state, $item)
+{
+  $form['#item'] = $item;
+  // Note confirm_form() can be used here, but I prefer to use my own for styling purposes
+  $form['header']        = array (
+    '#markup' => t('Are you sure you wish to delete the item with a field value of <em>@value</em>?', array ( '@value' => $item['title'] )),
+    '#prefix' => '<h2>',
+    '#suffix' => '</h2>',
+  );
+  $form['warning']       = array (
+    '#markup' => t('Warning, this action cannot be undone'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+  $form['delete_button'] = array (
+    '#type'  => 'submit',
+    '#value' => t('Delete item'),
+  );
+
+  return $form;
+}
+
+// Product Delete
+function kripal_itonics_products_delete_confirm_submit($form, &$form_state)
+{
+  if ($form_state['values']['op'] == $form_state['values']['delete_button'])
+  {
+    $item = $form['#item'];
+    db_delete('kripal_itonics_products')->condition('pid', $item['pid'])->execute();
+  }
+  $form_state['redirect'] = 'products';
+  drupal_set_message(t('The item has been deleted'));
+}
+
+// Product Edit Form
+function kripal_itonics_products_edit_form($form, &$form_state, $item)
+{
+  // Default date and date format
+  $format        = 'Y-m-d';
+  $form['#item'] = $item;
+
+  $form['title'] = array (
+    '#type'          => 'textfield',
+    '#title'         => 'Product Title',
+    '#default_value' => ! empty($item['title']) ? $item['title'] : '',
+    '#required'      => true,
+  );
+
+  $form['image'] = array (
+    '#type'          => 'file',
+    '#title'         => t('Image'),
+    '#description'   => t('The image of the product'),
+    '#default_value' => ! empty($item['image']) ? $item['image'] : '',
+    '#required'      => false
+  );
+
+  $form['image-preview'] = array (
+    '#type'   => 'markup',
+    '#prefix' => '<div id="box" class="image_class">',
+    '#suffix' => '</div>',
+    '#markup' => '<img src="' . image_style_url('medium', $item['image']) . '" alt="picture">',
+  );
+
+  $form['summary'] = array (
+    '#type'          => 'textarea',
+    '#title'         => 'Product Summary',
+    '#default_value' => ! empty($item['summary']) ? $item['summary'] : '',
+    '#required'      => false,
+  );
+
+  $form['description'] = array (
+    '#type'          => 'textarea',
+    '#title'         => 'Product Description',
+    '#default_value' => ! empty($item['description']) ? $item['description'] : '',
+    '#required'      => false,
+    '#format'        => 'filtered_html',
+    '#base_type'     => 'textarea',
+  );
+
+  $form['category'] = array (
+    '#type'          => 'select',
+    '#title'         => 'Product Category',
+    '#required'      => true,
+    '#options'       => _multiselect_options(),
+    '#multiple'      => true,
+    '#default_value' => explode('|', $item['category'])
+  );
+
+  $form['type'] = array (
+    '#type'          => 'radios',
+    '#title'         => 'Product Type',
+    '#default_value' => ! empty($item['type']) ? $item['type'] : '',
+    '#required'      => true,
+    '#options'       => _radio_options(),
+  );
+
+  $form['owner_email'] = array (
+    '#type'          => 'textfield',
+    '#title'         => 'Product Owner Email',
+    '#default_value' => ! empty($item['owner_email']) ? $item['owner_email'] : '',
+    '#required'      => true,
+  );
+
+  $form['expiry_date'] = array (
+    '#type'                => 'date_select',
+    '#title'               => t('Product Expiry Date'),
+    '#default_value'       => ! empty($item['expiry_date']) ? $item['expiry_date'] : '',
+    '#date_format'         => $format,
+    '#date_label_position' => 'within',
+    '#required'            => false
+  );
+
+  $form['save'] = array (
+    '#type'     => 'submit',
+    '#value'    => 'Save',
+    '#submit'   => array ( 'kripal_itonics_products_edit_confirm_submit' ),
+    '#validate' => array ( 'kripal_itonics_products_edit_validate' ),
+  );
+
+  return $form;
+}
+
+// Product Edit Validate
+function kripal_itonics_products_edit_validate($form, &$form_state)
+{
+  $mail = $form_state['values']['owner_email'];
+
+  if ( ! valid_email_address($mail))
+  {
+    form_set_error('[submitted][email_address]', t('The email address appears to be invalid.'));
+  }
+
+  // Store new file temp.
+  $new_file = file_save_upload('image', array (
+    'file_validate_extensions' => array ( 'jpg jpeg png gif' ),
+    'custom_validate_size'     => array ( 1024 * 1024 * 30 )
+  ));
+
+  if ( ! is_null($new_file))
+  {
+    if ( ! $new_file)
+    {
+      form_set_error('[submitted][image]', t('The image is not valid.'));
+    }
+    else
+    {
+      $new_file->status = FILE_STATUS_PERMANENT;
+      file_save($new_file);
+      $form_state['storage']['fid'] = $new_file->fid;
+    }
+  }
+}
+
+// Update Product
+function kripal_itonics_products_edit_confirm_submit($form, &$form_state)
+{
+  if ($form_state['values'])
+  {
+    if (array_key_exists('storage', $form_state))
+    {
+      $new_file      = file_load($form_state['storage']['fid']);
+      $some_location = 'public://';
+      $location      = $some_location . time() . $new_file->filename;
+      $result        = file_move($new_file, $location);
+      $url           = $result ? $result->filename : '';
+    }
+    else
+    {
+      $url = $form_state['values']['image'];
+    }
+    $category = implode('|', $form_state['values']['category']);
+
+    $item        = $form['#item'];
+    $pid         = $item['pid'];
+    $title       = $form_state['values']['title'];
+    $summary     = $form_state['values']['summary'];
+    $description = $form_state['values']['description'];
+    $type        = $form_state['values']['type'];
+    $owner_email = $form_state['values']['owner_email'];
+    $expiry_date = $form_state['values']['expiry_date'];
+
+    $query = "UPDATE  {kripal_itonics_products} SET 
+                  title = '$title', 
+                  image = '$url',
+                  summary = '$summary', 
+                  description = '$description', 
+                  category = '$category', 
+                  type = '$type', 
+                  owner_email = '$owner_email', 
+                  expiry_date = '$expiry_date'
+                  WHERE pid=$pid";
+    $rs    = db_query($query);
+  }
+  drupal_goto("products");
+}
+
+/**
+ * Multiselect options
+ */
+function _multiselect_options()
+{
+  $selector = array (
+    'electronics'   => t('Electronics'),
+    'stationary'    => t('Stationary'),
+    'men_fashion'   => t('Men Fashion'),
+    'women_fashion' => t('Women Fashion'),
+    'kids'          => t('Kids')
+  );
+
+  return $selector;
+}
+
+/**
+ * Multiselect options
+ */
+function _radio_options()
+{
+  $selector = array (
+    'downloadeable' => t('Downloadable'),
+    'deliverable'   => t('Deliverable')
+  );
+
+  return $selector;
+}

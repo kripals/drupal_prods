@@ -1,0 +1,70 @@
+<?php
+
+
+function kripal_itonics_products_schema() {
+  $schema = array();
+
+  $schema['kripal_itonics_products'] = array(
+    'description' => 'The products table.',
+    'fields' => array(
+      'pid' => array(
+        'description' => 'The primary identifier for the table.',
+        'type' => 'serial',
+        'not null' => TRUE),
+
+      'title' => array(
+        'description' => 'The title of the product.',
+        'type' => 'varchar',
+        'length' => 155,
+        'not null' => TRUE),
+
+      'image' => array(
+        'description' => 'Url of the image of the product.',
+        'type' => 'text',
+        'not null' => FALSE),
+
+      'summary' => array(
+        'description' => 'The summary of the product.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE),
+
+      'description' => array(
+        'description' => 'The description of the product.',
+        'type' => 'text',
+        'not null' => FALSE),
+
+      'category' => array(
+        'description' => 'The category of the product.',
+        'type' => 'text',
+        'not null' => TRUE),
+
+      'type' => array(
+        'description' => 'The type of the product.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE),
+
+      'owner_email' => array(
+        'description' => 'The product owner email.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE),
+
+      'expiry_date' => array(
+        'description' => 'The expiry date of the product.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE),
+      ),
+    'indexes' => array(
+      'title'        => array('title')
+      ),
+    'unique keys' => array(
+      'pid'     => array('pid')
+      ),
+    'primary key' => array('pid'),
+    );
+
+    return $schema;
+}

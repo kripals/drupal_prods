@@ -1,0 +1,8 @@
+name = Kripal Itonics Products
+description = Product module
+core = 7.x
+package = Custom Modules
+
+dependencies[] = libraries
+dependencies[] = wysiwyg
+dependencies[] = date
