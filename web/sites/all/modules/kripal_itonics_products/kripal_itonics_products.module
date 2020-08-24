@@ -145,11 +145,12 @@ function kripal_itonics_products_form($node, &$form_state)
   );
 
   $form['category'] = array (
-    '#type'     => 'select',
-    '#title'    => 'Product Category',
-    '#required' => true,
-    '#options'  => _multiselect_options(),
-    '#multiple' => true,
+    '#type'       => 'select',
+    '#title'      => 'Product Category',
+    '#required'   => true,
+    '#pre_render' => array ( 'dropdown_checkboxes' ),
+    '#options'    => _multiselect_options(),
+    '#multiple'   => true,
   );
 
   $form['type'] = array (
@@ -343,6 +344,7 @@ function kripal_itonics_products_edit_form($form, &$form_state, $item)
     '#type'          => 'select',
     '#title'         => 'Product Category',
     '#required'      => true,
+    '#pre_render'    => array ( 'dropdown_checkboxes' ),
     '#options'       => _multiselect_options(),
     '#multiple'      => true,
     '#default_value' => explode('|', $item['category'])
