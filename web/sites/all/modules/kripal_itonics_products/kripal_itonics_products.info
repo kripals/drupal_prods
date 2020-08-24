@@ -6,3 +6,4 @@ package = Custom Modules
 dependencies[] = libraries
 dependencies[] = wysiwyg
 dependencies[] = date
+dependencies[] = dropdown_checkboxes
